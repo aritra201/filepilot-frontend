@@ -1,0 +1,88 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-background: #0f1115;
+  --color-surface: #1a1d23;
+  --color-surface-dim: #111317;
+  --color-surface-bright: #37393e;
+  --color-surface-low: #1a1c20;
+  --color-surface-container: #1e2024;
+  --color-surface-high: #282a2e;
+  --color-surface-highest: #333539;
+  --color-on-surface: #e2e2e8;
+  --color-on-surface-variant: #c3c6d6;
+  --color-primary: #b2c5ff;
+  --color-primary-container: #5b8cff;
+  --color-on-primary: #002c72;
+  --color-on-primary-container: #002665;
+  --color-secondary: #cebdff;
+  --color-secondary-container: #4f319c;
+  --color-outline: #8d909f;
+  --color-outline-variant: #434653;
+  --color-border: rgb(255 255 255 / 0.08);
+  --color-text-muted: #8b93a7;
+  --color-destructive: #ef4444;
+  --color-error: #ffb4ab;
+  --color-video: #5b8cff;
+  --color-audio: #a78bfa;
+  --color-documents: #f5a462;
+  --color-photos: #4ade80;
+  --color-other: #8b93a7;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Consolas, monospace;
+
+  --spacing-sidebar: 260px;
+  --spacing-gutter: 24px;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-background);
+  color: var(--color-on-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #333539;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #434653;
+}
+
+input,
+textarea,
+select {
+  font-family: inherit;
+}
+
+::selection {
+  background: rgb(91 140 255 / 0.3);
+  color: #b2c5ff;
+}
