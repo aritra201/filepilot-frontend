@@ -209,7 +209,7 @@ async function runDownload(id, serverId, path, name, size, signal) {
       error: null,
     });
     toast.success(`${saveAs} downloaded`);
-    useUiStore.getState().showTransferTray();
+    useUiStore.getState().expandDownloadTray();
   } catch (err) {
     if (signal.aborted) {
       const reason = abortReasons.get(id);

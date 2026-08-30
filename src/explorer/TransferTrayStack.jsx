@@ -10,9 +10,8 @@ export function TransferTrayStack() {
 
   const uploads = useUiStore((s) => s.uploads);
   const downloads = useUiStore((s) => s.downloads);
-  const visible = useUiStore((s) => s.transferTrayVisible);
 
-  if (!visible || (!uploads.length && !downloads.length)) return null;
+  if (!uploads.length && !downloads.length) return null;
 
   return (
     <div className="fixed right-6 bottom-6 z-[60] flex w-80 flex-col gap-3">

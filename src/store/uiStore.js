@@ -14,7 +14,8 @@ export const useUiStore = create((set) => ({
   reconnect: { open: false, serverId: null },
   uploads: [],
   downloads: [],
-  transferTrayVisible: true,
+  uploadTrayMinimized: false,
+  downloadTrayMinimized: false,
 
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),
@@ -23,23 +24,11 @@ export const useUiStore = create((set) => ({
   promptReconnect: (serverId) => set({ reconnect: { open: true, serverId } }),
   closeReconnect: () => set({ reconnect: { open: false, serverId: null } }),
 
-  showTransferTray: () => set({ transferTrayVisible: true }),
-  dismissTransferTray: () =>
-    set((state) => {
-      const uploads = state.uploads.filter(
-        (item) =>
-          item.status === 'uploading' ||
-          item.status === 'pending' ||
-          item.status === 'processing' ||
-          item.status === 'paused'
-      );
-      const downloads = state.downloads.filter(
-        (item) => item.status === 'downloading' || item.status === 'paused'
-      );
-      syncPersist(uploads);
-      persistActiveDownloads(downloads);
-      return { uploads, downloads, transferTrayVisible: false };
-    }),
+  expandUploadTray: () => set({ uploadTrayMinimized: false }),
+  minimizeUploadTray: () => set({ uploadTrayMinimized: true }),
+  expandDownloadTray: () => set({ downloadTrayMinimized: false }),
+  minimizeDownloadTray: () => set({ downloadTrayMinimized: true }),
+  showTransferTray: () => set({ uploadTrayMinimized: false, downloadTrayMinimized: false }),
 
   removeUpload: (id) =>
     set((state) => {
@@ -69,7 +58,7 @@ export const useUiStore = create((set) => ({
         })),
       ];
       syncPersist(uploads);
-      return { uploads, transferTrayVisible: true };
+      return { uploads, uploadTrayMinimized: false };
     }),
   updateUpload: (id, patch) =>
     set((state) => {
@@ -98,7 +87,7 @@ export const useUiStore = create((set) => ({
     set((state) => {
       const downloads = [...state.downloads, item];
       persistActiveDownloads(downloads);
-      return { downloads, transferTrayVisible: true };
+      return { downloads, downloadTrayMinimized: false };
     }),
   updateDownload: (id, patch) =>
     set((state) => {

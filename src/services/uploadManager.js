@@ -145,7 +145,7 @@ async function uploadFileChunks(session, itemId) {
         });
         sessions.delete(itemId);
         await clearUploadFile(itemId);
-        useUiStore.getState().showTransferTray();
+        useUiStore.getState().expandUploadTray();
         return saved;
       }
     } catch (err) {
@@ -237,7 +237,7 @@ export async function restorePersistedUploads() {
     }
 
     if (persisted.length) {
-      useUiStore.getState().showTransferTray();
+      useUiStore.getState().expandUploadTray();
     }
   })().finally(() => {
     restoringRef.promise = null;

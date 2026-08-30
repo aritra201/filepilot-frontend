@@ -23,7 +23,7 @@ export function useResumeUploads() {
       }
     }
 
-    useUiStore.setState({ uploads: merged, transferTrayVisible: true });
+    useUiStore.setState({ uploads: merged });
 
     restorePersistedUploads().finally(() => setReady(true));
   }, []);
