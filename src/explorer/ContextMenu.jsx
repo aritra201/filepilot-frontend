@@ -1,5 +1,6 @@
 import { Copy, Download, FolderInput, Info, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { isMountDeviceEntry } from '../utils/storageDevice';
 
 export function ContextMenu({ x, y, entry, isRoot, onClose, onAction }) {
   const ref = useRef(null);
@@ -32,9 +33,11 @@ export function ContextMenu({ x, y, entry, isRoot, onClose, onAction }) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [onClose]);
 
+  const storageEntry = isMountDeviceEntry(entry) || isRoot;
+
   const items = [
-    { id: 'info', label: 'File info', icon: Info },
-    { id: 'download', label: 'Download', icon: Download },
+    { id: 'info', label: storageEntry ? 'Storage info' : 'File info', icon: Info },
+    entry?.type === 'file' && { id: 'download', label: 'Download', icon: Download },
     !isRoot && { id: 'rename', label: 'Rename', icon: Pencil },
     !isRoot && { id: 'copy', label: 'Copy to…', icon: Copy },
     !isRoot && { id: 'move', label: 'Move to…', icon: FolderInput },

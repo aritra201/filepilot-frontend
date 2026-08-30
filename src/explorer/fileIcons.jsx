@@ -1,5 +1,6 @@
-import { Archive, File, FileText, Film, Folder, Image, Music } from 'lucide-react';
+import { Archive, File, FileText, Film, Folder, HardDrive, Image, Music } from 'lucide-react';
 import { getFileCategory } from '../utils/fileTypes';
+import { isMountDeviceEntry } from '../utils/storageDevice';
 
 const colorClass = {
   folder: 'text-on-surface-variant',
@@ -9,6 +10,7 @@ const colorClass = {
   docs: 'text-documents',
   archive: 'text-other',
   other: 'text-other',
+  storage: 'text-primary',
 };
 
 const iconMap = {
@@ -19,17 +21,28 @@ const iconMap = {
   docs: FileText,
   archive: Archive,
   other: File,
+  storage: HardDrive,
 };
 
-export function FileTypeIcon({ entry, size = 48, filled = false }) {
+function resolveEntryVisual(entry) {
+  if (isMountDeviceEntry(entry)) {
+    return { category: 'storage', Icon: HardDrive };
+  }
+
   const category = getFileCategory(entry.name, entry.type);
-  const Icon = iconMap[category] || File;
+  return { category, Icon: iconMap[category] || File };
+}
+
+export function FileTypeIcon({ entry, size = 48, filled = false }) {
+  const { category, Icon } = resolveEntryVisual(entry);
+  const useFilledFolder = filled && category === 'folder';
+
   return (
     <Icon
       className={`${colorClass[category] || colorClass.other}`}
       size={size}
-      fill={filled && category === 'folder' ? 'currentColor' : 'none'}
-      strokeWidth={filled && category === 'folder' ? 1 : 1.5}
+      fill={useFilledFolder ? 'currentColor' : 'none'}
+      strokeWidth={useFilledFolder ? 1 : 1.5}
     />
   );
 }

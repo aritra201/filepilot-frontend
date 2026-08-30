@@ -75,7 +75,7 @@ export function DeviceUsageCard({ device, onViewFiles }) {
           </div>
         </div>
         <div className="mt-4 flex w-full justify-between text-sm">
-          <span className="text-on-surface">{formatBytes(used)}</span>
+          <span className="text-on-surface">Used {formatBytes(used)}</span>
           <span className="text-text-muted">{formatBytes(total)} Total</span>
         </div>
         {device.scanned_at && (

@@ -2,12 +2,19 @@ import { X } from 'lucide-react';
 import { useFileInfo } from '../hooks/useFiles';
 import { formatBytes, formatDate } from '../utils/format';
 import { getFileCategory } from '../utils/fileTypes';
+import {
+  getStorageDeviceLabel,
+  isMountDeviceEntry,
+  isStorageInfo,
+} from '../utils/storageDevice';
 import { FileTypeIcon } from './fileIcons';
 import { PageSpinner } from '../ui/Spinner';
 
 export function FileInfoDrawer({ open, serverId, path, entry, onClose }) {
   const info = useFileInfo(serverId, path, open);
   const data = info.data;
+  const displayEntry = entry || { name: data?.path, type: data?.type, path: data?.path };
+  const storageView = isStorageInfo(entry, data);
 
   if (!open) return null;
 
@@ -16,7 +23,9 @@ export function FileInfoDrawer({ open, serverId, path, entry, onClose }) {
       <div className="absolute inset-0 bg-black/40" aria-hidden="true" />
       <aside className="relative h-full w-full max-w-md border-l border-border bg-surface p-6 shadow-[0_20px_40px_rgba(0,0,0,0.4)]">
         <div className="mb-6 flex items-start justify-between">
-          <h3 className="text-lg font-semibold text-on-surface">File info</h3>
+          <h3 className="text-lg font-semibold text-on-surface">
+            {storageView ? 'Storage info' : 'File info'}
+          </h3>
           <button type="button" onClick={onClose} className="text-text-muted hover:text-on-surface">
             <X className="size-5" />
           </button>
@@ -25,18 +34,34 @@ export function FileInfoDrawer({ open, serverId, path, entry, onClose }) {
         {(data || entry) && (
           <div>
             <div className="mb-6 flex flex-col items-center">
-              <FileTypeIcon entry={entry || { name: data?.path, type: data?.type }} size={56} />
+              <FileTypeIcon
+                entry={
+                  isMountDeviceEntry(displayEntry) || data?.storage
+                    ? { ...displayEntry, isRoot: true }
+                    : displayEntry
+                }
+                size={56}
+                filled={displayEntry.type === 'directory' && !isMountDeviceEntry(displayEntry)}
+              />
               <p className="mt-3 text-center text-sm font-medium text-on-surface">
                 {entry?.name || data?.path}
               </p>
               <p className="mt-1 text-xs text-text-muted capitalize">
-                {getFileCategory(entry?.name || data?.path, data?.type || entry?.type)}
+                {storageView ? getStorageDeviceLabel() : getFileCategory(entry?.name || data?.path, data?.type || entry?.type)}
               </p>
             </div>
             <dl className="space-y-3 text-sm">
               <Row label="Path" value={data?.path || path} mono />
               <Row label="Type" value={data?.type || entry?.type} />
-              <Row label="Size" value={formatBytes(data?.size ?? entry?.size)} />
+              {data?.storage ? (
+                <>
+                  <Row label="Used" value={formatBytes(data.storage.used_bytes)} />
+                  <Row label="Total" value={formatBytes(data.storage.total_bytes)} />
+                  <Row label="Free" value={formatBytes(data.storage.free_bytes)} />
+                </>
+              ) : (
+                <Row label="Size" value={formatBytes(data?.size ?? entry?.size)} />
+              )}
               <Row label="Modified" value={formatDate(data?.mtime || entry?.mtime)} />
               {data?.permissions != null && (
                 <Row label="Permissions" value={String(data.permissions)} mono />

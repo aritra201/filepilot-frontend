@@ -1,5 +1,6 @@
 import { Check, MoreVertical } from 'lucide-react';
 import { formatBytes, formatDate } from '../utils/format';
+import { isMountDeviceEntry } from '../utils/storageDevice';
 import { FileTypeIcon } from './fileIcons';
 
 export function FileListRow({ entry, selected, selectable = true, onSelect, onOpen, onMenu }) {
@@ -33,10 +34,10 @@ export function FileListRow({ entry, selected, selectable = true, onSelect, onOp
       ) : (
         <span className="size-5 shrink-0" aria-hidden="true" />
       )}
-      <FileTypeIcon entry={entry} size={20} filled={entry.type === 'directory'} />
+      <FileTypeIcon entry={entry} size={20} filled={entry.type === 'directory' && !entry.isRoot} />
       <p className="min-w-0 flex-1 truncate text-sm font-medium text-on-surface">{entry.name}</p>
       <p className="hidden w-28 text-right text-xs text-text-muted sm:block">
-        {entry.type === 'directory' ? '—' : formatBytes(entry.size)}
+        {isMountDeviceEntry(entry) ? 'Storage' : entry.type === 'directory' ? '—' : formatBytes(entry.size)}
       </p>
       <p className="hidden w-40 text-right text-xs text-text-muted md:block">{formatDate(entry.mtime)}</p>
       <button

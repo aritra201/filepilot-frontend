@@ -1,5 +1,6 @@
 import { Check, MoreVertical } from 'lucide-react';
 import { formatBytes } from '../utils/format';
+import { getStorageDeviceLabel, isMountDeviceEntry } from '../utils/storageDevice';
 import { FileTypeIcon } from './fileIcons';
 
 export function FileGridItem({ entry, selected, selectable = true, onSelect, onOpen, onMenu }) {
@@ -49,14 +50,14 @@ export function FileGridItem({ entry, selected, selectable = true, onSelect, onO
         </button>
       </div>
       <div className="flex flex-1 flex-col items-center justify-center py-4">
-        <FileTypeIcon entry={entry} size={48} filled={entry.type === 'directory'} />
+        <FileTypeIcon entry={entry} size={48} filled={entry.type === 'directory' && !entry.isRoot} />
       </div>
       <div className="mt-auto border-t border-border/50 pt-2">
         <p className={`truncate text-sm font-medium ${selectable && selected ? 'text-primary' : 'text-on-surface'}`} title={entry.name}>
           {entry.name}
         </p>
         <p className="mt-0.5 text-xs text-text-muted">
-          {entry.type === 'directory' ? 'Folder' : formatBytes(entry.size)}
+          {isMountDeviceEntry(entry) ? getStorageDeviceLabel() : entry.type === 'directory' ? 'Folder' : formatBytes(entry.size)}
         </p>
       </div>
     </div>
