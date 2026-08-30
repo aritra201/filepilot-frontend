@@ -11,7 +11,7 @@ export function loadActiveUploads() {
 
 export function persistActiveUploads(uploads) {
   const active = uploads.filter((item) =>
-    ['pending', 'uploading', 'processing'].includes(item.status)
+    ['pending', 'uploading', 'processing', 'paused'].includes(item.status)
   );
   if (!active.length) {
     localStorage.removeItem(STORAGE_KEY);
@@ -29,6 +29,7 @@ export function persistActiveUploads(uploads) {
         status: item.status,
         progress: item.progress,
         uploadedBytes: item.uploadedBytes,
+        targetPath: item.targetPath,
       }))
     )
   );

@@ -10,7 +10,7 @@ export function loadActiveDownloads() {
 }
 
 export function persistActiveDownloads(downloads) {
-  const active = downloads.filter((item) => item.status === 'downloading');
+  const active = downloads.filter((item) => ['downloading', 'paused'].includes(item.status));
   if (!active.length) {
     localStorage.removeItem(STORAGE_KEY);
     return;

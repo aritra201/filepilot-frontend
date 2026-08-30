@@ -11,6 +11,7 @@ import {
 } from '../utils/downloadStorage';
 
 const activeControllers = new Map();
+const abortReasons = new Map();
 const runningIds = new Set();
 const FLUSH_BYTES = 512 * 1024;
 
@@ -73,12 +74,20 @@ async function flushMemBuffer(id, memChunks, memSize) {
 }
 
 export function cancelDownload(id) {
+  abortReasons.set(id, 'cancelled');
   activeControllers.get(id)?.abort();
   activeControllers.delete(id);
   runningIds.delete(id);
+  abortReasons.delete(id);
   clearDownloadStorage(id);
   clearPersistedDownload(id);
-  useUiStore.getState().updateDownload(id, { status: 'error', error: 'Cancelled' });
+  useUiStore.getState().removeDownload(id);
+}
+
+export function pauseDownload(id) {
+  if (!runningIds.has(id)) return;
+  abortReasons.set(id, 'paused');
+  activeControllers.get(id)?.abort();
 }
 
 export function startDownload({ serverId, path, name, size = 0 }) {
@@ -105,6 +114,8 @@ export function startDownload({ serverId, path, name, size = 0 }) {
 
 export function resumeDownload(item) {
   if (runningIds.has(item.id)) return;
+  abortReasons.delete(item.id);
+  useUiStore.getState().updateDownload(item.id, { status: 'downloading', error: null });
   launchDownload(item.id, item.serverId, item.path, item.name, item.size);
 }
 
@@ -189,6 +200,7 @@ async function runDownload(id, serverId, path, name, size, signal) {
     saveBlobToDisk(blob, saveAs);
     await clearDownloadStorage(id);
     clearPersistedDownload(id);
+    abortReasons.delete(id);
 
     updateDownload(id, {
       status: 'done',
@@ -197,8 +209,27 @@ async function runDownload(id, serverId, path, name, size, signal) {
       error: null,
     });
     toast.success(`${saveAs} downloaded`);
+    useUiStore.getState().showTransferTray();
   } catch (err) {
-    if (signal.aborted) return;
+    if (signal.aborted) {
+      const reason = abortReasons.get(id);
+      abortReasons.delete(id);
+
+      if (reason === 'paused') {
+        const stored = await getStoredBytes(id);
+        const progress = size > 0 ? Math.min(100, Math.round((stored / size) * 100)) : 0;
+        updateDownload(id, {
+          downloadedBytes: stored,
+          progress,
+          status: 'paused',
+          error: null,
+        });
+        syncDownloads();
+        return;
+      }
+
+      if (reason === 'cancelled') return;
+    }
 
     const stored = await getStoredBytes(id);
     if (stored > 0) {
@@ -206,13 +237,10 @@ async function runDownload(id, serverId, path, name, size, signal) {
       updateDownload(id, {
         downloadedBytes: stored,
         progress,
-        status: 'downloading',
-        error: 'Interrupted — resuming…',
+        status: 'paused',
+        error: 'Connection lost — tap resume to continue',
       });
       syncDownloads();
-      window.setTimeout(() => {
-        if (!runningIds.has(id)) resumeDownload({ id, serverId, path, name, size, downloadedBytes: stored });
-      }, 1500);
       return;
     }
 

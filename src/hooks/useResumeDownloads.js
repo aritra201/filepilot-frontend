@@ -13,16 +13,22 @@ export function useResumeDownloads() {
 
     for (const item of persisted) {
       if (!merged.some((d) => d.id === item.id)) {
-        merged.push({ ...item, error: null });
+        merged.push({ ...item, error: item.status === 'paused' ? null : item.error ?? null });
       } else {
         const idx = merged.findIndex((d) => d.id === item.id);
-        merged[idx] = { ...merged[idx], ...item, status: 'downloading', error: null };
+        merged[idx] = {
+          ...merged[idx],
+          ...item,
+          status: item.status === 'paused' ? 'paused' : merged[idx].status,
+          error: null,
+        };
       }
     }
 
     useUiStore.setState({ downloads: merged });
 
     for (const item of persisted) {
+      if (item.status === 'paused') continue;
       if (item.status !== 'downloading') continue;
       updateDownload(item.id, { status: 'downloading', error: 'Resuming…' });
       resumeDownload(item);

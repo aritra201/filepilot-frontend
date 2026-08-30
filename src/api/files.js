@@ -1,6 +1,8 @@
 import { api, transferTimeoutMs, unwrap, getAccessToken, API_BASE } from './client';
 import { getExtension } from '../utils/fileTypes';
 
+const CHUNK_FALLBACK_BYTES = 2 * 1024 * 1024;
+
 export const filesApi = {
   list: (serverId, path) =>
     api.get(`/servers/${serverId}/files`, { params: { path } }).then(unwrap),
@@ -33,6 +35,30 @@ export const filesApi = {
       })
       .then(unwrap);
   },
+  uploadChunk: (serverId, meta, chunkBlob, signal, onUploadProgress) => {
+    const form = new FormData();
+    form.append('path', meta.path);
+    form.append('uploadId', meta.uploadId);
+    form.append('fileName', meta.fileName);
+    form.append('totalSize', String(meta.totalSize));
+    form.append('offset', String(meta.offset));
+    form.append('chunk', chunkBlob, meta.fileName);
+    return api
+      .post(`/servers/${serverId}/files/upload-chunk`, form, {
+        signal,
+        onUploadProgress: onUploadProgress
+          ? (e) => onUploadProgress(e.loaded ?? 0)
+          : undefined,
+        timeout: transferTimeoutMs(Math.max(chunkBlob.size, CHUNK_FALLBACK_BYTES)),
+      })
+      .then(unwrap);
+  },
+  getChunkUploadStatus: (serverId, { path, uploadId }) =>
+    api
+      .get(`/servers/${serverId}/files/upload-chunk/status`, {
+        params: { path, uploadId },
+      })
+      .then(unwrap),
   getUploadProgress: (serverId, uploadId) =>
     api.get(`/servers/${serverId}/files/upload-progress/${uploadId}`).then(unwrap),
   pollUploadProgress(serverId, uploadId, onProgress, intervalMs = 500) {

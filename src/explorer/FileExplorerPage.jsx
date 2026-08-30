@@ -2,13 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { FolderPlus, Grid3x3, List, Upload } from 'lucide-react';
-import { filesApi } from '../api/files';
 import { apiErrorMessage } from '../api/client';
 import { startDownload } from '../services/downloadManager';
+import { startUploads } from '../services/uploadManager';
 import { useFileMutations, useFiles } from '../hooks/useFiles';
 import { useServers } from '../hooks/useServers';
 import { useUiStore } from '../store/uiStore';
-import { formatBytes } from '../utils/format';
 import { previewKind } from '../utils/fileTypes';
 import { basename, isRootPath, joinPath, MNT_ROOT, normalizePath } from '../utils/paths';
 import { Button } from '../ui/Button';
@@ -36,8 +35,6 @@ export function FileExplorerPage() {
   const setPageTitle = useUiStore((s) => s.setPageTitle);
   const setShowSearch = useUiStore((s) => s.setShowSearch);
   const searchQuery = useUiStore((s) => s.searchQuery);
-  const addUploads = useUiStore((s) => s.addUploads);
-  const updateUpload = useUiStore((s) => s.updateUpload);
   const promptReconnect = useUiStore((s) => s.promptReconnect);
 
   const { data: servers = [] } = useServers();
@@ -136,102 +133,9 @@ export function FileExplorerPage() {
       toast.error('Uploads are disabled at /mnt root.');
       return;
     }
-    const files = [...fileList];
-    addUploads(files, serverId);
-
-    let hadError = false;
-
-    for (const file of files) {
-      const item = useUiStore
-        .getState()
-        .uploads.find((u) => u.name === file.name && u.size === file.size && u.status === 'pending');
-      if (!item) continue;
-
-      const uploadId = crypto.randomUUID();
-      updateUpload(item.id, {
-        uploadId,
-        serverId,
-        status: 'uploading',
-        progress: 0,
-        uploadedBytes: 0,
-      });
-
-      const stopPoll = filesApi.pollUploadProgress(serverId, uploadId, (prog) => {
-        if (prog.phase === 'done') {
-          updateUpload(item.id, {
-            status: 'done',
-            progress: 100,
-            uploadedBytes: file.size,
-          });
-          return;
-        }
-        if (prog.phase !== 'writing' || !prog.total || prog.written <= 0) return;
-        const pct = Math.round((prog.written / prog.total) * 100);
-        updateUpload(item.id, {
-          uploadedBytes: prog.written,
-          progress: pct,
-          status: 'processing',
-        });
-      });
-
-      try {
-        const result = await filesApi.upload(serverId, path, [file], {
-          uploadId,
-          onUploadProgress: (e) => {
-            const loaded = e.loaded ?? 0;
-            const uploadTotal = e.total || file.size;
-            const clientDone = uploadTotal > 0 && loaded >= uploadTotal;
-
-            if (clientDone) {
-              updateUpload(item.id, {
-                uploadedBytes: file.size,
-                progress: 100,
-                status: 'processing',
-              });
-              return;
-            }
-
-            const pct = uploadTotal ? Math.round((loaded / uploadTotal) * 100) : 0;
-            updateUpload(item.id, {
-              uploadedBytes: Math.min(loaded, file.size),
-              progress: pct,
-              status: 'uploading',
-            });
-          },
-        });
-        stopPoll();
-        const saved = result?.uploaded?.[0];
-        const savedName = saved?.name || file.name;
-        updateUpload(item.id, {
-          name: savedName,
-          progress: 100,
-          uploadedBytes: file.size,
-          status: 'done',
-        });
-        mutations.invalidate();
-        toast.success(
-          savedName !== file.name ? `${file.name} saved as ${savedName}` : `${savedName} uploaded`
-        );
-      } catch (err) {
-        hadError = true;
-        const data = err?.response?.data;
-        if (data?.code === 'INSUFFICIENT_STORAGE') {
-          toast.error(
-            `Not enough space for ${file.name} — ${formatBytes(data.freeBytes)} free, need ${formatBytes(data.requiredBytes || file.size)}.`
-          );
-        } else {
-          toast.error(apiErrorMessage(err, `Failed to upload ${file.name}`));
-        }
-        updateUpload(item.id, {
-          status: 'error',
-          error: apiErrorMessage(err, 'Failed'),
-        });
-      } finally {
-        stopPoll();
-      }
-    }
-
-    if (!hadError && files.length > 1) toast.success(`${files.length} files uploaded`);
+    await startUploads(fileList, serverId, path, {
+      onSaved: () => mutations.invalidate(),
+    });
   };
 
   if (!serverId) return null;

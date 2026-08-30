@@ -14,6 +14,7 @@ export const useUiStore = create((set) => ({
   reconnect: { open: false, serverId: null },
   uploads: [],
   downloads: [],
+  transferTrayVisible: true,
 
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
   setPageTitle: (pageTitle) => set({ pageTitle }),
@@ -21,6 +22,35 @@ export const useUiStore = create((set) => ({
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   promptReconnect: (serverId) => set({ reconnect: { open: true, serverId } }),
   closeReconnect: () => set({ reconnect: { open: false, serverId: null } }),
+
+  showTransferTray: () => set({ transferTrayVisible: true }),
+  dismissTransferTray: () =>
+    set((state) => {
+      const uploads = state.uploads.filter(
+        (item) =>
+          item.status === 'uploading' ||
+          item.status === 'pending' ||
+          item.status === 'processing' ||
+          item.status === 'paused'
+      );
+      const downloads = state.downloads.filter(
+        (item) => item.status === 'downloading' || item.status === 'paused'
+      );
+      syncPersist(uploads);
+      persistActiveDownloads(downloads);
+      return { uploads, downloads, transferTrayVisible: false };
+    }),
+
+  removeUpload: (id) =>
+    set((state) => {
+      clearPersistedUpload(id);
+      return { uploads: state.uploads.filter((item) => item.id !== id) };
+    }),
+  removeDownload: (id) =>
+    set((state) => {
+      clearPersistedDownload(id);
+      return { downloads: state.downloads.filter((item) => item.id !== id) };
+    }),
 
   addUploads: (files, serverId = null) =>
     set((state) => {
@@ -39,7 +69,7 @@ export const useUiStore = create((set) => ({
         })),
       ];
       syncPersist(uploads);
-      return { uploads };
+      return { uploads, transferTrayVisible: true };
     }),
   updateUpload: (id, patch) =>
     set((state) => {
@@ -57,7 +87,8 @@ export const useUiStore = create((set) => ({
         (item) =>
           item.status === 'uploading' ||
           item.status === 'pending' ||
-          item.status === 'processing'
+          item.status === 'processing' ||
+          item.status === 'paused'
       );
       syncPersist(uploads);
       return { uploads };
@@ -67,7 +98,7 @@ export const useUiStore = create((set) => ({
     set((state) => {
       const downloads = [...state.downloads, item];
       persistActiveDownloads(downloads);
-      return { downloads };
+      return { downloads, transferTrayVisible: true };
     }),
   updateDownload: (id, patch) =>
     set((state) => {
@@ -81,7 +112,9 @@ export const useUiStore = create((set) => ({
     }),
   clearFinishedDownloads: () =>
     set((state) => {
-      const downloads = state.downloads.filter((item) => item.status === 'downloading');
+      const downloads = state.downloads.filter(
+        (item) => item.status === 'downloading' || item.status === 'paused'
+      );
       persistActiveDownloads(downloads);
       return { downloads };
     }),
