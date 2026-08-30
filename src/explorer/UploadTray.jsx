@@ -109,7 +109,7 @@ export function UploadTray() {
             const live = hasUploadSession(item.id);
             const showPause = item.status === 'uploading' && live;
             const showResume = canResumeUpload(item);
-            const showSpinner = item.status === 'uploading' && !live && !item.error;
+            const showSpinner = item.status === 'uploading' && !item.error;
 
             return (
               <li key={item.id}>
