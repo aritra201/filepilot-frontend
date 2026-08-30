@@ -3,18 +3,27 @@ import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Pause, Play, X, XCircle 
 import { pauseUpload, resumeUpload, cancelUpload, hasUploadSession, canResumeUpload } from '../services/uploadManager';
 import { useUiStore } from '../store/uiStore';
 import { formatBytes } from '../utils/format';
+import { formatEta, formatSpeed, formatTransferStatus } from '../utils/transferSpeed';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 function progressLabel(item) {
-  if (item.status === 'paused') {
-    return `Paused · ${formatBytes(item.uploadedBytes || 0)} / ${formatBytes(item.size)}`;
-  }
-  if (item.status === 'done') return `${formatBytes(item.size)} uploaded`;
+  if (item.status === 'pending') return 'Waiting to start…';
   if (item.status === 'processing') {
-    return `Sending to server: ${formatBytes(item.uploadedBytes || 0)} / ${formatBytes(item.size)}`;
+    const detail = formatTransferStatus(
+      { ...item, status: 'uploading' },
+      {
+        bytesKey: 'uploadedBytes',
+        doneMessage: '',
+        errorFallback: 'Upload failed',
+      }
+    );
+    return detail ? `Sending to server · ${detail}` : 'Sending to server…';
   }
-  if (item.status === 'error') return item.error || 'Upload failed';
-  return `Sending to server: ${formatBytes(item.uploadedBytes || 0)} / ${formatBytes(item.size)}`;
+  return formatTransferStatus(item, {
+    bytesKey: 'uploadedBytes',
+    doneMessage: `${formatBytes(item.size)} uploaded`,
+    errorFallback: 'Upload failed',
+  });
 }
 
 function isActive(item) {
@@ -23,6 +32,15 @@ function isActive(item) {
 
 function traySummary(uploads) {
   const active = uploads.filter(isActive);
+  if (active.length === 1 && active[0].status === 'uploading') {
+    const item = active[0];
+    const pct = item.size ? Math.round(((item.uploadedBytes || 0) / item.size) * 100) : 0;
+    const eta = formatEta(item.etaSeconds);
+    if (eta) return `${pct}% · ${eta}`;
+    const speed = formatSpeed(item.speedBps);
+    if (speed) return `${pct}% · ${speed}`;
+    return `${pct}%`;
+  }
   if (active.length) {
     const total = active.reduce((sum, item) => sum + (item.size || 0), 0);
     const done = active.reduce((sum, item) => sum + (item.uploadedBytes || 0), 0);

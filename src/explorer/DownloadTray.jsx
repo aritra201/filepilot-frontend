@@ -3,18 +3,15 @@ import { CheckCircle2, ChevronDown, ChevronUp, Loader2, Pause, Play, X, XCircle 
 import { cancelDownload, pauseDownload, resumeDownload } from '../services/downloadManager';
 import { useUiStore } from '../store/uiStore';
 import { formatBytes } from '../utils/format';
+import { formatEta, formatSpeed, formatTransferStatus } from '../utils/transferSpeed';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 
 function progressLabel(item) {
-  if (item.status === 'paused') {
-    return `Paused · ${formatBytes(item.downloadedBytes || 0)} / ${formatBytes(item.size)}`;
-  }
-  if (item.status === 'done') return `${formatBytes(item.downloadedBytes || item.size)} downloaded`;
-  if (item.status === 'error') return item.error || 'Download failed';
-  if (item.size > 0) {
-    return `${formatBytes(item.downloadedBytes || 0)} / ${formatBytes(item.size)}`;
-  }
-  return `${formatBytes(item.downloadedBytes || 0)} received`;
+  return formatTransferStatus(item, {
+    bytesKey: 'downloadedBytes',
+    doneMessage: `${formatBytes(item.downloadedBytes || item.size)} downloaded`,
+    errorFallback: 'Download failed',
+  });
 }
 
 function isActive(item) {
@@ -23,6 +20,20 @@ function isActive(item) {
 
 function traySummary(downloads) {
   const active = downloads.filter(isActive);
+  if (active.length === 1 && active[0].status === 'downloading') {
+    const item = active[0];
+    const pct =
+      item.size > 0
+        ? Math.round(((item.downloadedBytes || 0) / item.size) * 100)
+        : item.downloadedBytes > 0
+          ? 100
+          : 0;
+    const eta = formatEta(item.etaSeconds);
+    if (eta) return `${pct}% · ${eta}`;
+    const speed = formatSpeed(item.speedBps);
+    if (speed) return `${pct}% · ${speed}`;
+    return `${pct}%`;
+  }
   if (active.length) {
     const total = active.reduce((sum, item) => sum + (item.size || 0), 0);
     const done = active.reduce((sum, item) => sum + (item.downloadedBytes || 0), 0);

@@ -9,11 +9,38 @@ import {
   clearDownloadStorage,
   getStoredBytes,
 } from '../utils/downloadStorage';
+import { TransferSpeedTracker } from '../utils/transferSpeed';
 
 const activeControllers = new Map();
 const abortReasons = new Map();
 const runningIds = new Set();
+/** @type {Map<string, TransferSpeedTracker>} */
+const speedTrackers = new Map();
 const FLUSH_BYTES = 512 * 1024;
+
+function getSpeedTracker(id, startBytes = 0) {
+  let tracker = speedTrackers.get(id);
+  if (!tracker) {
+    tracker = new TransferSpeedTracker();
+    speedTrackers.set(id, tracker);
+  }
+  tracker.reset(startBytes);
+  return tracker;
+}
+
+function sampleSpeed(id, bytes, total) {
+  let tracker = speedTrackers.get(id);
+  if (!tracker) {
+    tracker = new TransferSpeedTracker();
+    speedTrackers.set(id, tracker);
+  }
+  tracker.sample(bytes);
+  return tracker.metrics(bytes, total);
+}
+
+function clearSpeedTracker(id) {
+  speedTrackers.delete(id);
+}
 
 function parseFilename(res, fallback) {
   const disposition = res.headers.get('content-disposition') || '';
@@ -81,6 +108,7 @@ export function cancelDownload(id) {
   abortReasons.delete(id);
   clearDownloadStorage(id);
   clearPersistedDownload(id);
+  clearSpeedTracker(id);
   useUiStore.getState().removeDownload(id);
 }
 
@@ -104,8 +132,12 @@ export function startDownload({ serverId, path, name, size = 0 }) {
     progress: 0,
     status: 'downloading',
     error: null,
+    speedBps: 0,
+    etaSeconds: null,
     startedAt: Date.now(),
   });
+
+  getSpeedTracker(id, 0);
 
   syncDownloads();
   launchDownload(id, serverId, path, name, size);
@@ -115,7 +147,13 @@ export function startDownload({ serverId, path, name, size = 0 }) {
 export function resumeDownload(item) {
   if (runningIds.has(item.id)) return;
   abortReasons.delete(item.id);
-  useUiStore.getState().updateDownload(item.id, { status: 'downloading', error: null });
+  getSpeedTracker(item.id, item.downloadedBytes ?? 0);
+  useUiStore.getState().updateDownload(item.id, {
+    status: 'downloading',
+    error: null,
+    speedBps: 0,
+    etaSeconds: null,
+  });
   launchDownload(item.id, item.serverId, item.path, item.name, item.size);
 }
 
@@ -136,6 +174,7 @@ async function runDownload(id, serverId, path, name, size, signal) {
   const fallbackName = name || path.split('/').pop() || 'download';
 
   const startByte = await getStoredBytes(id);
+  getSpeedTracker(id, startByte);
 
   try {
     const res = await fetchDownload(url, signal, startByte);
@@ -179,10 +218,13 @@ async function runDownload(id, serverId, path, name, size, signal) {
         lastProgressAt = now;
         const displayBytes = flushedTotal + unflushed;
         const progress = total > 0 ? Math.min(100, Math.round((displayBytes / total) * 100)) : 0;
+        const { speedBps, etaSeconds } = sampleSpeed(id, displayBytes, total);
         updateDownload(id, {
           downloadedBytes: displayBytes,
           progress,
           status: 'downloading',
+          speedBps,
+          etaSeconds,
           error: null,
         });
         syncDownloads();
@@ -201,11 +243,14 @@ async function runDownload(id, serverId, path, name, size, signal) {
     await clearDownloadStorage(id);
     clearPersistedDownload(id);
     abortReasons.delete(id);
+    clearSpeedTracker(id);
 
     updateDownload(id, {
       status: 'done',
       progress: 100,
       downloadedBytes: total || finalBytes,
+      speedBps: 0,
+      etaSeconds: null,
       error: null,
     });
     toast.success(`${saveAs} downloaded`);
@@ -218,10 +263,13 @@ async function runDownload(id, serverId, path, name, size, signal) {
       if (reason === 'paused') {
         const stored = await getStoredBytes(id);
         const progress = size > 0 ? Math.min(100, Math.round((stored / size) * 100)) : 0;
+        clearSpeedTracker(id);
         updateDownload(id, {
           downloadedBytes: stored,
           progress,
           status: 'paused',
+          speedBps: 0,
+          etaSeconds: null,
           error: null,
         });
         syncDownloads();
@@ -247,7 +295,13 @@ async function runDownload(id, serverId, path, name, size, signal) {
     const message = err?.message || 'Download failed';
     await clearDownloadStorage(id);
     clearPersistedDownload(id);
-    updateDownload(id, { status: 'error', error: message });
+    clearSpeedTracker(id);
+    updateDownload(id, {
+      status: 'error',
+      error: message,
+      speedBps: 0,
+      etaSeconds: null,
+    });
     toast.error(message);
   }
 }

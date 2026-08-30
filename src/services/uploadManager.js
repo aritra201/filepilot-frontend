@@ -9,12 +9,39 @@ import {
   loadUploadFile,
   saveUploadFile,
 } from '../utils/uploadStorage';
+import { TransferSpeedTracker } from '../utils/transferSpeed';
 
 const CHUNK_SIZE = 2 * 1024 * 1024;
 
 /** @type {Map<string, { file: File, serverId: string, targetPath: string, uploadId: string, paused: boolean, abortController: AbortController | null }>} */
 const sessions = new Map();
+/** @type {Map<string, TransferSpeedTracker>} */
+const speedTrackers = new Map();
 const restoringRef = { promise: null };
+
+function getSpeedTracker(itemId, startBytes = 0) {
+  let tracker = speedTrackers.get(itemId);
+  if (!tracker) {
+    tracker = new TransferSpeedTracker();
+    speedTrackers.set(itemId, tracker);
+  }
+  tracker.reset(startBytes);
+  return tracker;
+}
+
+function sampleSpeed(itemId, bytes, total) {
+  let tracker = speedTrackers.get(itemId);
+  if (!tracker) {
+    tracker = new TransferSpeedTracker();
+    speedTrackers.set(itemId, tracker);
+  }
+  tracker.sample(bytes);
+  return tracker.metrics(bytes, total);
+}
+
+function clearSpeedTracker(itemId) {
+  speedTrackers.delete(itemId);
+}
 
 function findPendingItem(file) {
   return useUiStore
@@ -84,14 +111,18 @@ async function uploadFileChunks(session, itemId) {
   const { updateUpload } = useUiStore.getState();
 
   let offset = await syncUploadOffset(itemId, session);
+  getSpeedTracker(itemId, offset);
 
   while (offset < file.size) {
     if (session.paused) {
       offset = await syncUploadOffsetAfterPause(itemId, session);
+      clearSpeedTracker(itemId);
       updateUpload(itemId, {
         status: 'paused',
         uploadedBytes: offset,
         progress: file.size ? Math.round((offset / file.size) * 100) : 0,
+        speedBps: 0,
+        etaSeconds: null,
         error: null,
       });
       return;
@@ -124,23 +155,30 @@ async function uploadFileChunks(session, itemId) {
         (loaded) => {
           if (session.paused) return;
           const sent = offset + loaded;
+          const { speedBps, etaSeconds } = sampleSpeed(itemId, sent, file.size);
           updateUpload(itemId, {
             uploadedBytes: sent,
             progress: file.size ? Math.min(100, Math.round((sent / file.size) * 100)) : 0,
             status: 'uploading',
+            speedBps,
+            etaSeconds,
           });
         }
       );
 
       offset = result.received ?? end;
+      const { speedBps, etaSeconds } = sampleSpeed(itemId, offset, file.size);
 
       if (result.complete && result.uploaded) {
         const saved = result.uploaded;
+        clearSpeedTracker(itemId);
         updateUpload(itemId, {
           name: saved.name,
           progress: 100,
           uploadedBytes: file.size,
           status: 'done',
+          speedBps: 0,
+          etaSeconds: null,
           error: null,
         });
         sessions.delete(itemId);
@@ -148,13 +186,23 @@ async function uploadFileChunks(session, itemId) {
         useUiStore.getState().expandUploadTray();
         return saved;
       }
+
+      updateUpload(itemId, {
+        uploadedBytes: offset,
+        progress: file.size ? Math.min(100, Math.round((offset / file.size) * 100)) : 0,
+        speedBps,
+        etaSeconds,
+      });
     } catch (err) {
       if (controller.signal.aborted && session.paused) {
         offset = await syncUploadOffsetAfterPause(itemId, session);
+        clearSpeedTracker(itemId);
         updateUpload(itemId, {
           status: 'paused',
           uploadedBytes: offset,
           progress: file.size ? Math.round((offset / file.size) * 100) : 0,
+          speedBps: 0,
+          etaSeconds: null,
           error: null,
         });
         return;
@@ -183,7 +231,10 @@ async function uploadFileChunks(session, itemId) {
       updateUpload(itemId, {
         status: 'error',
         error: apiErrorMessage(err, 'Upload failed'),
+        speedBps: 0,
+        etaSeconds: null,
       });
+      clearSpeedTracker(itemId);
       sessions.delete(itemId);
       throw err;
     }
@@ -252,7 +303,13 @@ export async function pauseUpload(itemId) {
   session.paused = true;
   session.abortController?.abort();
   await syncUploadOffsetAfterPause(itemId, session);
-  useUiStore.getState().updateUpload(itemId, { status: 'paused', error: null });
+  clearSpeedTracker(itemId);
+  useUiStore.getState().updateUpload(itemId, {
+    status: 'paused',
+    speedBps: 0,
+    etaSeconds: null,
+    error: null,
+  });
 }
 
 export async function resumeUpload(itemId) {
@@ -272,6 +329,7 @@ export async function resumeUpload(itemId) {
   }
 
   session.paused = false;
+  getSpeedTracker(itemId, item.uploadedBytes ?? 0);
   await syncUploadOffset(itemId, session);
   useUiStore.getState().updateUpload(itemId, { status: 'uploading', error: null });
   uploadFileChunks(session, itemId).catch(() => {});
@@ -281,6 +339,7 @@ export async function cancelUpload(itemId) {
   const session = sessions.get(itemId);
   session?.abortController?.abort();
   sessions.delete(itemId);
+  clearSpeedTracker(itemId);
   await clearUploadFile(itemId);
   useUiStore.getState().removeUpload(itemId);
 }
