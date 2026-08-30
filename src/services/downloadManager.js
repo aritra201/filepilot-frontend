@@ -42,6 +42,16 @@ function clearSpeedTracker(id) {
   speedTrackers.delete(id);
 }
 
+function isAbortError(err) {
+  if (!err) return false;
+  const message = String(err.message || err).toLowerCase();
+  return (
+    err.name === 'AbortError' ||
+    message.includes('abort') ||
+    message.includes('bodystreambuffer')
+  );
+}
+
 function parseFilename(res, fallback) {
   const disposition = res.headers.get('content-disposition') || '';
   const match = disposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)/i);
@@ -105,7 +115,6 @@ export function cancelDownload(id) {
   activeControllers.get(id)?.abort();
   activeControllers.delete(id);
   runningIds.delete(id);
-  abortReasons.delete(id);
   clearDownloadStorage(id);
   clearPersistedDownload(id);
   clearSpeedTracker(id);
@@ -256,7 +265,7 @@ async function runDownload(id, serverId, path, name, size, signal) {
     toast.success(`${saveAs} downloaded`);
     useUiStore.getState().expandDownloadTray();
   } catch (err) {
-    if (signal.aborted) {
+    if (signal.aborted || isAbortError(err)) {
       const reason = abortReasons.get(id);
       abortReasons.delete(id);
 
@@ -277,6 +286,9 @@ async function runDownload(id, serverId, path, name, size, signal) {
       }
 
       if (reason === 'cancelled') return;
+
+      const stillTracked = useUiStore.getState().downloads.some((item) => item.id === id);
+      if (!stillTracked) return;
     }
 
     const stored = await getStoredBytes(id);
