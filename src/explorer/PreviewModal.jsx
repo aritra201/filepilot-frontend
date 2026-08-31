@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Download, Play, X } from 'lucide-react';
+import { Download, ExternalLink, Play, X } from 'lucide-react';
 import { filesApi } from '../api/files';
 import { apiErrorMessage } from '../api/client';
 import { previewKind } from '../utils/fileTypes';
+import { diagnoseVideoStream } from '../utils/videoStream';
 import { Button } from '../ui/Button';
 import { PageSpinner } from '../ui/Spinner';
 
@@ -15,14 +16,6 @@ function isMobileBrowser() {
     /Android|iPhone|iPad|iPod|CriOS|Mobile Safari/i.test(ua) ||
     window.matchMedia?.('(pointer: coarse)').matches
   );
-}
-
-function videoMimeType(name = '') {
-  const ext = name.split('.').pop()?.toLowerCase();
-  if (ext === 'mp4' || ext === 'm4v') return 'video/mp4';
-  if (ext === 'webm') return 'video/webm';
-  if (ext === 'mov') return 'video/quicktime';
-  return 'video/mp4';
 }
 
 export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
@@ -49,7 +42,7 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
     setLoading(kind !== 'video' || !isMobileVideo);
 
     if (usesDirectStream) {
-      setStreamUrl(filesApi.streamPreviewUrl(serverId, entry.path, entry.name));
+      setStreamUrl(filesApi.streamPreviewUrl(serverId, entry.path));
       if (kind !== 'video' || !isMobileVideo) {
         setLoading(false);
       }
@@ -76,7 +69,6 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
 
   if (!open || !entry) return null;
 
-  const videoType = videoMimeType(entry.name);
   const showVideo = streamUrl && kind === 'video' && streamStarted && !error;
 
   return (
@@ -113,9 +105,22 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
           {error && (
             <div className="space-y-3 px-6 text-center">
               <p className="text-sm text-destructive">{error}</p>
-              <Button variant="secondary" size="sm" onClick={() => onDownload(entry)}>
-                Download instead
-              </Button>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {streamUrl && kind === 'video' && (
+                  <a
+                    href={streamUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-on-surface hover:bg-surface-high"
+                  >
+                    <ExternalLink className="size-4" />
+                    Open video directly
+                  </a>
+                )}
+                <Button variant="secondary" size="sm" onClick={() => onDownload(entry)}>
+                  Download instead
+                </Button>
+              </div>
             </div>
           )}
 
@@ -152,22 +157,18 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
                 src={streamUrl}
                 controls
                 playsInline
-                preload="metadata"
+                preload={isMobileVideo ? 'auto' : 'metadata'}
                 className={`w-full bg-black ${isMobileVideo ? 'h-full max-h-full object-contain' : 'max-h-[70vh]'}`}
                 onLoadedMetadata={() => setLoading(false)}
                 onCanPlay={() => setLoading(false)}
-                onError={(e) => {
+                onError={async () => {
                   setLoading(false);
-                  const code = e.currentTarget?.error?.code;
-                  const hint =
-                    code === 4
-                      ? ' This format is not supported on your phone — use Download.'
-                      : ' Use Download if streaming fails on mobile data.';
-                  setError(`Could not play video.${hint}`);
+                  const detail = streamUrl
+                    ? await diagnoseVideoStream(streamUrl)
+                    : 'Could not play video.';
+                  setError(detail);
                 }}
-              >
-                <source src={streamUrl} type={videoType} />
-              </video>
+              />
             </>
           )}
 

@@ -100,11 +100,14 @@ export const filesApi = {
       return url;
     }
   },
-  streamPreviewUrl(serverId, path, name = '') {
+  streamPreviewUrl(serverId, path) {
     const token = getAccessToken();
     const params = new URLSearchParams({ path });
     if (token) params.set('access_token', token);
-    return `${API_BASE}/servers/${serverId}/files/stream?${params.toString()}`;
+    const base = API_BASE.startsWith('http')
+      ? API_BASE.replace(/\/$/, '')
+      : `${window.location.origin}${API_BASE.startsWith('/') ? API_BASE : `/${API_BASE}`}`.replace(/\/$/, '');
+    return `${base}/servers/${serverId}/files/stream?${params.toString()}`;
   },
   streamBlob: async (serverId, path, name = '') => {
     const res = await api.get(`/servers/${serverId}/files/stream`, {
