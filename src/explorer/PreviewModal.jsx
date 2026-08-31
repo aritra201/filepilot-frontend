@@ -3,7 +3,7 @@ import { Download, ExternalLink, Play, X } from 'lucide-react';
 import { filesApi } from '../api/files';
 import { apiErrorMessage } from '../api/client';
 import { previewKind } from '../utils/fileTypes';
-import { diagnoseVideoStream } from '../utils/videoStream';
+import { diagnoseVideoStream, iosVideoSrc, warmVideoTail } from '../utils/videoStream';
 import { Button } from '../ui/Button';
 import { PageSpinner } from '../ui/Spinner';
 
@@ -25,6 +25,7 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
   const [textContent, setTextContent] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [videoProbe, setVideoProbe] = useState(null);
   const kind = entry ? previewKind(entry.name, entry.type) : null;
   const usesDirectStream = kind && STREAMING_KINDS.has(kind);
   const mobileBrowser = isMobileBrowser();
@@ -39,10 +40,18 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
     setStreamUrl(null);
     setStreamStarted(!isMobileVideo);
     setTextContent('');
+    setVideoProbe(null);
     setLoading(kind !== 'video' || !isMobileVideo);
 
     if (usesDirectStream) {
-      setStreamUrl(filesApi.streamPreviewUrl(serverId, entry.path));
+      const url = filesApi.streamPreviewUrl(serverId, entry.path);
+      setStreamUrl(url);
+      if (kind === 'video') {
+        filesApi
+          .info(serverId, entry.path)
+          .then((info) => setVideoProbe(info.videoProbe || null))
+          .catch(() => {});
+      }
       if (kind !== 'video' || !isMobileVideo) {
         setLoading(false);
       }
@@ -70,6 +79,14 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
   if (!open || !entry) return null;
 
   const showVideo = streamUrl && kind === 'video' && streamStarted && !error;
+  const videoSrc = isMobileVideo ? iosVideoSrc(streamUrl) : streamUrl;
+  const moovAtEnd = videoProbe?.moovAtEnd;
+  const playHint =
+    moovAtEnd && videoProbe?.mobileFriendly
+      ? 'This file stores video metadata at the end — first load may take 10–20 seconds on SD storage.'
+      : videoProbe && !videoProbe.mobileFriendly
+        ? `Detected: ${videoProbe.codecs?.join(', ') || 'unknown codec'}. Browser playback may not work.`
+        : 'Large videos stream in parts on mobile. Tap below to start playback.';
 
   return (
     <div
@@ -106,7 +123,7 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
             <div className="space-y-3 px-6 text-center">
               <p className="text-sm text-destructive">{error}</p>
               <div className="flex flex-wrap items-center justify-center gap-2">
-                {streamUrl && kind === 'video' && (
+                {streamUrl && kind === 'video' && videoProbe?.mobileFriendly !== false && (
                   <a
                     href={streamUrl}
                     target="_blank"
@@ -130,13 +147,14 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
 
           {streamUrl && kind === 'video' && !streamStarted && !error && (
             <div className="flex flex-col items-center gap-4 px-6 text-center">
-              <p className="text-sm text-text-muted">
-                Large videos stream in parts on mobile. Tap below to start playback.
-              </p>
+              <p className="text-sm text-text-muted">{playHint}</p>
               <Button
-                onClick={() => {
+                onClick={async () => {
                   setStreamStarted(true);
                   setLoading(true);
+                  if (moovAtEnd) {
+                    await warmVideoTail(streamUrl, entry.size || 0);
+                  }
                 }}
               >
                 <Play className="size-4" />
@@ -148,13 +166,18 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
           {showVideo && (
             <>
               {loading && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50">
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/50 px-6 text-center">
                   <PageSpinner />
+                  {moovAtEnd && (
+                    <p className="text-xs text-white/80">
+                      Reading video metadata from SD storage — this can take 15–30 seconds…
+                    </p>
+                  )}
                 </div>
               )}
               <video
-                key={streamUrl}
-                src={streamUrl}
+                key={videoSrc}
+                src={videoSrc}
                 controls
                 playsInline
                 preload={isMobileVideo ? 'auto' : 'metadata'}
@@ -164,7 +187,10 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
                 onError={async () => {
                   setLoading(false);
                   const detail = streamUrl
-                    ? await diagnoseVideoStream(streamUrl)
+                    ? await diagnoseVideoStream(streamUrl, {
+                        fileSize: entry.size || 0,
+                        videoProbe,
+                      })
                     : 'Could not play video.';
                   setError(detail);
                 }}
