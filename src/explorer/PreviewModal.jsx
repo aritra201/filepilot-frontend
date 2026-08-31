@@ -8,6 +8,16 @@ import { PageSpinner } from '../ui/Spinner';
 
 const STREAMING_KINDS = new Set(['video', 'audio']);
 
+/** Mobile Safari, Chrome (Android/iOS), and other touch browsers. */
+function isMobilePlayback() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  return (
+    /Android|iPhone|iPad|iPod|CriOS|Mobile Safari/i.test(ua) ||
+    window.matchMedia?.('(pointer: coarse)').matches
+  );
+}
+
 export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
   const [mediaUrl, setMediaUrl] = useState(null);
   const [blob, setBlob] = useState(null);
@@ -16,6 +26,7 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
   const [loading, setLoading] = useState(false);
   const kind = entry ? previewKind(entry.name, entry.type) : null;
   const usesDirectStream = kind && STREAMING_KINDS.has(kind);
+  const mobilePlayback = isMobilePlayback();
 
   useEffect(() => {
     if (!open || !entry || !serverId || !kind) return undefined;
@@ -82,13 +93,14 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
                 </div>
               )}
               <video
+                key={mediaUrl}
                 src={mediaUrl}
                 controls
-                autoPlay
-                preload="auto"
+                autoPlay={!mobilePlayback}
+                preload={mobilePlayback ? 'metadata' : 'auto'}
                 playsInline
                 className="max-h-[70vh] w-full"
-                onLoadedData={() => setLoading(false)}
+                onLoadedMetadata={() => setLoading(false)}
                 onCanPlay={() => setLoading(false)}
                 onError={() => {
                   setLoading(false);
@@ -105,12 +117,13 @@ export function PreviewModal({ open, serverId, entry, onClose, onDownload }) {
                 </div>
               )}
               <audio
+                key={mediaUrl}
                 src={mediaUrl}
                 controls
-                autoPlay
-                preload="auto"
+                autoPlay={!mobilePlayback}
+                preload={mobilePlayback ? 'metadata' : 'auto'}
                 className="w-full"
-                onLoadedData={() => setLoading(false)}
+                onLoadedMetadata={() => setLoading(false)}
                 onCanPlay={() => setLoading(false)}
                 onError={() => {
                   setLoading(false);
