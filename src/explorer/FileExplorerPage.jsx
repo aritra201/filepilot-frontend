@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { FolderPlus, Grid3x3, List, Upload } from 'lucide-react';
+import { CheckSquare, FolderPlus, Grid3x3, List, Square, Upload } from 'lucide-react';
 import { apiErrorMessage } from '../api/client';
 import { startDownload } from '../services/downloadManager';
 import { startUploads } from '../services/uploadManager';
@@ -127,6 +127,15 @@ export function FileExplorerPage() {
   };
 
   const selectedEntries = entries.filter((e) => selected.has(e.path));
+  const allVisibleSelected = entries.length > 0 && selectedEntries.length === entries.length;
+
+  const selectAll = () => {
+    setSelected(new Set(entries.map((e) => e.path)));
+  };
+
+  const deselectAll = () => {
+    setSelected(new Set());
+  };
 
   const runUploads = async (fileList) => {
     if (isRoot) {
@@ -170,21 +179,41 @@ export function FileExplorerPage() {
                   />
                 </>
               )}
-              {selectedEntries.length > 0 && !isRoot && (
+              {selectedEntries.length > 0 && (
                 <>
-                  <Button variant="ghost" size="sm" onClick={() => setCopyMove({ mode: 'copy', sources: selectedEntries })}>
-                    Copy
-                  </Button>
-                  <Button variant="ghost" size="sm" onClick={() => setCopyMove({ mode: 'move', sources: selectedEntries })}>
-                    Move
-                  </Button>
+                  <span className="text-xs font-medium text-text-muted">
+                    {selectedEntries.length} selected
+                  </span>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setDeleteTarget({ paths: selectedEntries.map((e) => e.path), name: `${selectedEntries.length} items` })}
+                    onClick={selectAll}
+                    disabled={allVisibleSelected}
                   >
-                    Delete
+                    <CheckSquare className="size-4" />
+                    Select all
                   </Button>
+                  <Button variant="ghost" size="sm" onClick={deselectAll}>
+                    <Square className="size-4" />
+                    Deselect all
+                  </Button>
+                  {!isRoot && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => setCopyMove({ mode: 'copy', sources: selectedEntries })}>
+                        Copy
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setCopyMove({ mode: 'move', sources: selectedEntries })}>
+                        Move
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDeleteTarget({ paths: selectedEntries.map((e) => e.path), name: `${selectedEntries.length} items` })}
+                      >
+                        Delete
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
               <div className="flex items-center rounded-lg border border-border bg-surface-low p-1">
