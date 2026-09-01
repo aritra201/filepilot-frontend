@@ -8,7 +8,7 @@ import { startUploads } from '../services/uploadManager';
 import { useFileMutations, useFiles } from '../hooks/useFiles';
 import { useServers } from '../hooks/useServers';
 import { useUiStore } from '../store/uiStore';
-import { previewKind } from '../utils/fileTypes';
+import { previewKind, getFileCategory } from '../utils/fileTypes';
 import { basename, isRootPath, joinPath, MNT_ROOT, normalizePath } from '../utils/paths';
 import { Button } from '../ui/Button';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
@@ -23,6 +23,7 @@ import { FileGridItem } from './FileGridItem';
 import { FileInfoDrawer } from './FileInfoDrawer';
 import { FileListRow } from './FileListRow';
 import { PreviewModal } from './PreviewModal';
+import { AudioPlayerModal } from './AudioPlayerModal';
 import { UploadDropzone } from './UploadDropzone';
 
 export function FileExplorerPage() {
@@ -54,6 +55,7 @@ export function FileExplorerPage() {
   const [copyMove, setCopyMove] = useState(null);
   const [infoEntry, setInfoEntry] = useState(null);
   const [previewEntry, setPreviewEntry] = useState(null);
+  const [audioPlayer, setAudioPlayer] = useState(null);
 
   useEffect(() => {
     setPageTitle(basename(path));
@@ -92,6 +94,15 @@ export function FileExplorerPage() {
   const openEntry = (entry) => {
     if (entry.type === 'directory') {
       setPath(entry.path);
+      return;
+    }
+    if (getFileCategory(entry.name, entry.type) === 'audio') {
+      const playlist = entries.filter((e) => getFileCategory(e.name, e.type) === 'audio');
+      const index = playlist.findIndex((e) => e.path === entry.path);
+      setAudioPlayer({
+        playlist,
+        index: index >= 0 ? index : 0,
+      });
       return;
     }
     if (previewKind(entry.name, entry.type)) {
@@ -426,6 +437,15 @@ export function FileExplorerPage() {
         serverId={serverId}
         entry={previewEntry}
         onClose={() => setPreviewEntry(null)}
+        onDownload={downloadEntry}
+      />
+
+      <AudioPlayerModal
+        open={Boolean(audioPlayer)}
+        serverId={serverId}
+        playlist={audioPlayer?.playlist || []}
+        initialIndex={audioPlayer?.index ?? 0}
+        onClose={() => setAudioPlayer(null)}
         onDownload={downloadEntry}
       />
     </UploadDropzone>

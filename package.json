@@ -14,6 +14,7 @@
     "@tanstack/react-query": "^5.102.8",
     "axios": "^1.20.0",
     "lucide-react": "^1.37.0",
+    "music-metadata": "^11.15.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hot-toast": "^2.6.0",
